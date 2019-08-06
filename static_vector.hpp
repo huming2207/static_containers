@@ -11,7 +11,7 @@ class static_vector
         std::size_t curr_size = 0;
 
     public:
-        const T& front() const
+        const T& front()
         {
             if(curr_size < 1) {
                 new(&data[0]) T();
@@ -26,7 +26,7 @@ class static_vector
 #endif
         }
 
-        const T& back() const
+        const T& back()
         {
             if(curr_size < 1) {
                 new(&data[0]) T();
@@ -40,13 +40,66 @@ class static_vector
 #endif
         }
 
+#if __cplusplus >= 201703L
+        [[nodiscard]]
+#endif
         /**
-         * Create an object and leave it at the last position
+         * Get the current size of vector
+         * @return Current amount of objects in the vector
+         */
+        std::size_t size() const
+        {
+            return curr_size;
+        }
+
+#if __cplusplus >= 201703L
+        [[nodiscard]]
+#endif
+        /**
+         * Get the maximum size of vector
+         * @return Maximum amount of objects in the vector
+         */
+        std::size_t max_size() const
+        {
+            return N;
+        }
+
+#if __cplusplus >= 201703L
+        [[nodiscard]]
+#endif
+        /**
+         * Get empty status
+         * @return True if empty
+         */
+        bool empty() const
+        {
+            return curr_size == 0;
+        }
+
+        /**
+         * Clear the vector
+         */
+        void clear()
+        {
+            for(std::size_t pos = 0; pos < curr_size; pos++) {
+                // note: needs std::launder as of C++17
+#if __cplusplus < 201703L
+                reinterpret_cast<T*>(&data[pos])->~T();
+#else
+                std::launder(reinterpret_cast<T*>(&data[pos]))->~T();
+#endif
+            }
+
+            curr_size = 0;
+        }
+
+        /**
+         * Constructs an element in-place at the end
          * @tparam Args argument types passed in to constructor
          * @param args arguments passed in to constructor
          * @return 0 if success, -1 if failed
          */
-        template<typename ...Args> int create_back(Args&&... args)
+        template<typename ...Args> int emplace_back(Args&&... args)
         {
             if(curr_size >= N) return -1; // Out of range
 
@@ -55,6 +108,26 @@ class static_vector
             ++curr_size;
         }
 
+        /**
+         * Insert an item to a specified position
+         * @param pos Position index
+         * @param val Item to insert
+         * @return 0 if success, -1 if out of range
+         */
+        int insert(std::size_t pos, const T& val)
+        {
+            if(curr_size < pos) return -1;
+            if(data[pos] != nullptr) {
+#if __cplusplus < 201703L
+                reinterpret_cast<T*>(&data[pos])->~T();
+#else
+                std::launder(reinterpret_cast<T*>(&data[pos]))->~T();
+#endif
+            }
+
+            new(&data[curr_size]) T(val);
+            return 0;
+        }
 
         const T& operator[](std::size_t pos) const
         {
@@ -68,14 +141,7 @@ class static_vector
 
         ~static_vector()
         {
-            for(std::size_t pos = 0; pos < curr_size; ++pos) {
-                // note: needs std::launder as of C++17
-#if __cplusplus < 201703L
-                reinterpret_cast<T*>(&data[pos])->~T();
-#else
-                std::launder(reinterpret_cast<T*>(&data[pos]))->~T();
-#endif
-            }
+            clear();
         }
 };
 
