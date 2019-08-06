@@ -140,12 +140,26 @@ class static_vector
         }
 
         /**
+        * Push an item at front
+        * @param item New item
+        * @return 0 if success, -1 if failed
+        */
+        int push(const T& item)
+        {
+            if(move_right() != 0) return -1;
+
+            // Construct value in memory of aligned storage, using inplace operator new
+            new(&data[0]) T(item);
+            ++curr_size;
+        }
+
+        /**
          * Insert an item to a specified position
          * @param pos Position index
-         * @param val Item to insert
+         * @param item Item to insert
          * @return 0 if success, -1 if out of range
          */
-        int insert(std::size_t pos, const T& val)
+        int insert(std::size_t pos, const T& item)
         {
             if(curr_size < pos) return -1;
             if(data[pos] != nullptr) {
@@ -156,7 +170,7 @@ class static_vector
 #endif
             }
 
-            new(&data[curr_size]) T(val);
+            new(&data[curr_size]) T(item);
             return 0;
         }
 
