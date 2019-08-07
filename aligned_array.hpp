@@ -57,30 +57,38 @@ class aligned_array
         // Access
         inline T &operator[](std::size_t pos)
         {
-            return *std::launder(
-                    reinterpret_cast<T *>(
-                            std::addressof(m_data[pos])));
+#if __cplusplus >= 201703L
+            return *std::launder(reinterpret_cast<T *>(std::addressof(m_data[pos])));
+#else
+            return *(reinterpret_cast<T *>(std::addressof(m_data[pos])));
+#endif
         }
 
         inline const T &operator[](std::size_t pos) const
         {
-            return *std::launder(
-                    reinterpret_cast<const T *>(
-                            std::addressof(m_data[pos])));
+#if __cplusplus >= 201703L
+            return *std::launder(reinterpret_cast<const T *>(std::addressof(m_data[pos])));
+#else
+            return *(reinterpret_cast<const T *>(std::addressof(m_data[pos])));
+#endif
         }
 
         inline T &at(std::size_t pos)
         {
-            return *std::launder(
-                    reinterpret_cast<T *>(
-                            std::addressof(m_data.at(pos))));
+#if __cplusplus >= 201703L
+            return *std::launder(reinterpret_cast<T *>(std::addressof(m_data.at(pos))));
+#else
+            return *(reinterpret_cast<T *>(std::addressof(m_data.at(pos))));
+#endif
         }
 
         inline const T &at(std::size_t pos) const
         {
-            return *std::launder(
-                    reinterpret_cast<const T *>(
-                            std::addressof(m_data.at(pos))));
+#if __cplusplus >= 201703L
+            return *std::launder(reinterpret_cast<const T *>(std::addressof(m_data.at(pos))));
+#else
+            return *(reinterpret_cast<const T *>(std::addressof(m_data.at(pos))));
+#endif
         }
 
         // Operations
@@ -100,12 +108,20 @@ class aligned_array
 
         inline void destroy(std::size_t pos)
         {
+#if __cplusplus >= 201703L
             std::destroy_at(std::launder(reinterpret_cast<const T *>(std::addressof(m_data[pos]))));
+#else
+            std::destroy_at(reinterpret_cast<const T *>(std::addressof(m_data[pos])));
+#endif
         }
 
         inline void bounded_destroy(std::size_t pos)
         {
+#if __cplusplus >= 201703L
             std::destroy_at(std::launder(reinterpret_cast<const T *>(std::addressof(m_data.at(pos)))));
+#else
+            std::destroy_at(reinterpret_cast<const T *>(std::addressof(m_data.at(pos))));
+#endif
         }
 
     private:
