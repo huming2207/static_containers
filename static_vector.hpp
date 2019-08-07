@@ -1,192 +1,143 @@
+/**
+ * Originally from: https://codereview.stackexchange.com/questions/211362/implementation-of-static-vector-using-an-array-of-stdaligned-storage-with-std
+ */
+
 #pragma once
 
-#include <iostream>
-#include <type_traits>
+#include <array>
+#include <stdexcept>
+
+#include "aligned_array.hpp"
 
 template<class T, std::size_t N>
-class static_vector
-{
-    private:
-        typename std::aligned_storage<sizeof(T), alignof(T)>::type data[N];
-        std::size_t curr_size = 1;
-
-    private:
-        int move_right()
-        {
-            if(curr_size >= N) return -1;       // Array is full now, can't swap
-            if(curr_size - 1 == 0) return 0;    // Array is empty, no need to swap anyway
-
-            // Allocate an empty item at the end
-            new(&data[curr_size]) T();
-
-            for(std::size_t idx = curr_size; idx > 0; idx--) {
-                std::swap(data[idx], data[idx - 1]);
-            }
-
-            return 0;
-        }
-
+class static_vector {
     public:
-        const T& front()
+        using value_type      = T;
+        using pointer         = T *;
+        using const_pointer   = const T *;
+        using reference       = value_type &;
+        using const_reference = const value_type &;
+        using iterator        = value_type *;
+        using const_iterator  = const value_type *;
+        using size_type       = std::size_t;
+
+        static_vector() = default;
+
+        ~static_vector() { clear(); }
+
+        static_vector(const static_vector &rhs)
         {
-            if(curr_size - 1 < 1) {
-                new(&data[0]) T();
-                curr_size += 1;
+            for (std::size_t pos = 0; pos < rhs.m_size; ++pos)
+                m_data[pos] = rhs.m_data[pos];
+            m_size = rhs.m_size;
+        }
+
+        static_vector &operator=(const static_vector &rhs)
+        {
+            if (this != std::addressof(rhs)) {
+                clear(); // Sets m_size to zero for safety
+                for (std::size_t pos = 0; pos < rhs.m_size; ++pos)
+                    m_data[pos] = rhs.m_data[pos];
+                m_size = rhs.m_size;
             }
-
-
-#if __cplusplus < 201703L
-            return *reinterpret_cast<const T*>(&data[0]);
-#else
-            return *std::launder(reinterpret_cast<const T*>(&data[0]));
-#endif
+            return *this;
         }
 
-        const T& back()
+        static_vector(static_vector &&rhs)
         {
-            if(curr_size - 1 < 1) {
-                new(&data[0]) T();
-                curr_size += 1;
-            }
+            // Start by clearing sizes to avoid bad data
+            // access in the case of an exception
+            std::size_t count_self = m_size;
+            std::size_t count_rhs = rhs.m_size;
+            m_size = 0;
+            rhs.m_size = 0;
 
-#if __cplusplus < 201703L
-            return *reinterpret_cast<const T*>(&data[curr_size]);
-#else
-            return *std::launder(reinterpret_cast<const T*>(&data[curr_size]));
-#endif
+            // Can't swap because the destination may be uninitialized
+            destroy_n(count_self);
+            for (std::size_t pos = 0; pos < count_rhs; ++pos)
+                m_data[pos] = std::move(rhs.m_data[pos]);
+            m_size = count_rhs;
         }
 
-#if __cplusplus >= 201703L
-        [[nodiscard]]
-#endif
-        /**
-         * Get the current size of vector
-         * @return Current amount of objects in the vector
-         */
-        std::size_t size() const
+        static_vector &operator=(static_vector &&rhs)
         {
-            return curr_size;
+            // Start by clearing sizes to avoid bad data
+            // access in the case of an exception
+            std::size_t count_self = m_size;
+            std::size_t count_rhs = rhs.m_size;
+            m_size = 0;
+            rhs.m_size = 0;
+
+            // Can't swap because the destination may be uninitialized
+            destroy_n(count_self);
+            for (std::size_t pos = 0; pos < count_rhs; ++pos)
+                m_data[pos] = std::move(rhs.m_data[pos]);
+            m_size = count_rhs;
+            return *this;
         }
 
-#if __cplusplus >= 201703L
-        [[nodiscard]]
-#endif
-        /**
-         * Get the maximum size of vector
-         * @return Maximum amount of objects in the vector
-         */
-        std::size_t max_size() const
+        // Size and capacity
+        constexpr std::size_t size() const { return m_size; }
+
+        constexpr std::size_t max_size() const { return N; }
+
+        constexpr bool empty() const { return m_size == 0; }
+
+        // Iterators
+        inline iterator begin() { return &m_data[0]; }
+
+        inline const_iterator begin() const { return &m_data[0]; }
+
+        inline iterator end() { return &m_data[m_size]; }
+
+        inline const_iterator end() const { return &m_data[m_size]; }
+
+        // Access
+        inline T &operator[](std::size_t pos)
         {
-            return N;
+            return m_data[pos];
         }
 
-#if __cplusplus >= 201703L
-        [[nodiscard]]
-#endif
-        /**
-         * Get empty status
-         * @return True if empty
-         */
-        bool empty() const
+        inline const T &operator[](std::size_t pos) const
         {
-            return curr_size == 0;
+            return m_data[pos];
         }
 
-        /**
-         * Clear the vector
-         */
-        void clear()
+        inline T &at(std::size_t pos)
         {
-            for(std::size_t pos = 0; pos < curr_size; pos++) {
-                // note: needs std::launder as of C++17
-#if __cplusplus < 201703L
-                reinterpret_cast<T*>(&data[pos])->~T();
-#else
-                std::launder(reinterpret_cast<T*>(&data[pos]))->~T();
-#endif
-            }
-
-            curr_size = 0;
+            if ((pos < 0) || (pos >= m_size)) return m_data[0];
+            return m_data[pos];
         }
 
-        /**
-         * Constructs an element in-place at the end
-         * @tparam Args argument types passed in to constructor
-         * @param args arguments passed in to constructor
-         * @return 0 if success, -1 if failed
-         */
-        template<typename ...Args> int emplace_back(Args&&... args)
+        inline const T &at(std::size_t pos) const
         {
-            if(curr_size >= N) return -1; // Out of range
-
-            // Construct value in memory of aligned storage, using inplace operator new
-            new(&data[curr_size - 1]) T(std::forward<Args>(args)...);
-            ++curr_size;
+            if ((pos < 0) || (pos >= m_size)) return m_data[0];
+            return m_data[pos];
         }
 
-        /**
-        * Constructs an element in-place at front
-        * @tparam Args argument types passed in to constructor
-        * @param args arguments passed in to constructor
-        * @return 0 if success, -1 if failed
-        */
-        template<typename ...Args> int emplace(Args&&... args)
+        // Operations
+        template<typename ...Args>
+        inline T &emplace_back(Args &&... args)
         {
-            if(move_right() != 0) return -1;
-
-            // Construct value in memory of aligned storage, using inplace operator new
-            new(&data[0]) T(std::forward<Args>(args)...);
-            ++curr_size;
+            T &result = m_data.bounded_emplace(m_size, args...);
+            ++m_size;
+            return result;
         }
 
-        /**
-        * Push an item at front
-        * @param item New item
-        * @return 0 if success, -1 if failed
-        */
-        int push(const T& item)
+        inline void clear()
         {
-            if(move_right() != 0) return -1;
-
-            // Construct value in memory of aligned storage, using inplace operator new
-            new(&data[0]) T(item);
-            ++curr_size;
+            std::size_t count = m_size;
+            m_size = 0; // In case of exception
+            destroy_n(count);
         }
 
-        /**
-         * Insert an item to a specified position
-         * @param pos Position index
-         * @param item Item to insert
-         * @return 0 if success, -1 if out of range
-         */
-        int insert(std::size_t pos, const T& item)
+    private:
+        void destroy_n(std::size_t count)
         {
-            if(curr_size < pos) return -1;
-            if(data[pos] != nullptr) {
-#if __cplusplus < 201703L
-                reinterpret_cast<T*>(&data[pos])->~T();
-#else
-                std::launder(reinterpret_cast<T*>(&data[pos]))->~T();
-#endif
-            }
-
-            new(&data[curr_size]) T(item);
-            return 0;
+            for (std::size_t pos = 0; pos < count; ++pos)
+                m_data.destroy(pos);
         }
 
-        const T& operator[](std::size_t pos) const
-        {
-#if __cplusplus < 201703L
-            return *reinterpret_cast<const T*>(&data[pos]);
-#else
-            return *std::launder(reinterpret_cast<const T*>(&data[pos]));
-#endif
-        }
-
-
-        ~static_vector()
-        {
-            clear();
-        }
+        aligned_array <T, N> m_data;
+        std::size_t m_size = 0;
 };
-
