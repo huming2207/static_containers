@@ -10,7 +10,8 @@
 #include "aligned_array.hpp"
 
 template<class T, std::size_t N>
-class static_vector {
+class static_vector
+{
     public:
         using value_type      = T;
         using pointer         = T *;
@@ -25,72 +26,65 @@ class static_vector {
 
         ~static_vector() { clear(); }
 
-        static_vector(const static_vector &rhs)
+        static_vector(const static_vector& rhs)
         {
-            for (std::size_t pos = 0; pos < rhs.m_size; ++pos)
-                m_data[pos] = rhs.m_data[pos];
+            std::uninitialized_copy(rhs.begin(), rhs.end(), begin());
             m_size = rhs.m_size;
         }
 
-        static_vector &operator=(const static_vector &rhs)
+        static_vector& operator=(const static_vector& rhs)
         {
-            if (this != std::addressof(rhs)) {
-                clear(); // Sets m_size to zero for safety
-                for (std::size_t pos = 0; pos < rhs.m_size; ++pos)
-                    m_data[pos] = rhs.m_data[pos];
-                m_size = rhs.m_size;
-            }
+            clear();
+            std::uninitialized_copy(rhs.begin(), rhs.end(), begin());
+            m_size = rhs.m_size;
             return *this;
         }
 
-        static_vector(static_vector &&rhs)
+        static_vector(static_vector&& rhs) noexcept
         {
-            // Start by clearing sizes to avoid bad data
-            // access in the case of an exception
-            std::size_t count_self = m_size;
-            std::size_t count_rhs = rhs.m_size;
-            m_size = 0;
-            rhs.m_size = 0;
-
-            // Can't swap because the destination may be uninitialized
-            destroy_n(count_self);
-            for (std::size_t pos = 0; pos < count_rhs; ++pos)
-                m_data[pos] = std::move(rhs.m_data[pos]);
-            m_size = count_rhs;
+            std::uninitialized_move(rhs.begin(), rhs.end(), begin());
+            m_size = rhs.m_size;
         }
 
-        static_vector &operator=(static_vector &&rhs)
+        static_vector& operator=(static_vector&& rhs) noexcept
         {
-            // Start by clearing sizes to avoid bad data
-            // access in the case of an exception
-            std::size_t count_self = m_size;
-            std::size_t count_rhs = rhs.m_size;
-            m_size = 0;
-            rhs.m_size = 0;
-
-            // Can't swap because the destination may be uninitialized
-            destroy_n(count_self);
-            for (std::size_t pos = 0; pos < count_rhs; ++pos)
-                m_data[pos] = std::move(rhs.m_data[pos]);
-            m_size = count_rhs;
+            clear();
+            std::uninitialized_move(rhs.begin(), rhs.end(), begin());
+            m_size = rhs.m_size;
             return *this;
+        }
+
+        void swap(static_vector& rhs)
+        {
+            auto temp = std::move(*this);
+            *this = std::move(rhs);
+            rhs = std::move(temp);
         }
 
         // Size and capacity
+#if __cplusplus >= 201703L
+        [[nodiscard]]
+#endif
         constexpr std::size_t size() const { return m_size; }
 
+#if __cplusplus >= 201703L
+        [[nodiscard]]
+#endif
         constexpr std::size_t max_size() const { return N; }
 
+#if __cplusplus >= 201703L
+        [[nodiscard]]
+#endif
         constexpr bool empty() const { return m_size == 0; }
 
         // Iterators
-        inline iterator begin() { return &m_data[0]; }
+        inline iterator begin() { return &m_data.data(); }
 
-        inline const_iterator begin() const { return &m_data[0]; }
+        inline const_iterator begin() const { return &m_data.data(); }
 
-        inline iterator end() { return &m_data[m_size]; }
+        inline iterator end() { return &m_data.data() + m_size; }
 
-        inline const_iterator end() const { return &m_data[m_size]; }
+        inline const_iterator end() const { return &m_data.data() + m_size; }
 
         // Access
         inline T &operator[](std::size_t pos)
@@ -119,7 +113,7 @@ class static_vector {
         template<typename ...Args>
         inline T &emplace_back(Args &&... args)
         {
-            T &result = m_data.bounded_emplace(m_size, args...);
+            T &result = m_data.bounded_emplace(m_size, std::forward<Args>(args)...);
             ++m_size;
             return result;
         }

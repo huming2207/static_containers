@@ -25,6 +25,24 @@ class aligned_array
 
         aligned_array &operator=(const aligned_array &rhs) = delete;
 
+        T* data()
+        {
+#if __cplusplus >= 201703L
+            return std::launder(reinterpret_cast<T*>(m_data.data()));
+#else
+            return reinterpret_cast<T*>(m_data.data());
+#endif
+        }
+
+        T const* data() const
+        {
+#if __cplusplus >= 201703L
+            return std::launder(reinterpret_cast<T const*>(m_data.data()));
+#else
+            return reinterpret_cast<T const*>(m_data.data());
+#endif
+        }
+
         // Size
 #if __cplusplus >= 201703L
         [[nodiscard]]
@@ -67,7 +85,8 @@ class aligned_array
 
         // Operations
         template<typename ...Args>
-        inline T &emplace(size_t pos, Args &&... args) {
+        inline T &emplace(size_t pos, Args &&... args)
+        {
             return *::new(std::addressof(m_data[pos]))
                             T(std::forward<Args>(args)...);
         }
